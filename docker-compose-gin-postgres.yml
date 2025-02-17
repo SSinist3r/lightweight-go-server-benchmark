@@ -1,0 +1,29 @@
+services:
+  postgresdb:
+    image: postgres
+    # volumes:
+    #   - ./data/database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: lightweight-go-server
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d lightweight-go-server -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ginserver-postgres:
+    build: 
+      context: ./
+      dockerfile: "gin-postgres.dockerfile"
+    hostname: ginserver
+    environment:
+      - POSTGRES_URI=postgres://postgres:1234@postgresdb:5432/?sslmode=disable
+    depends_on:
+      postgresdb:
+        condition: service_healthy
+    ports:
+      - 8080:8080

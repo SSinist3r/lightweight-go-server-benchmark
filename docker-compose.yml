@@ -1,0 +1,21 @@
+services:
+  goserver:
+    build: 
+      context: ./
+      dockerfile: "echo-mongo.dockerfile"
+    hostname: goserver
+    environment:
+      - MONGODB_URI=mongodb://root:rootpassword@mongodb:27017
+    depends_on:
+      - mongodb
+    ports:
+      - 8080:8080
+  
+  mongodb:
+    image: mongo:latest
+    command: mongod --quiet --logpath /dev/null
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    ports:
+      - 27017:27017

@@ -1,0 +1,167 @@
+name: Run Benchmark Tests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '**.go'
+      - 'go.*'
+      - '_fixture/**'
+      - '.github/**'
+      - 'codecov.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**.go'
+      - 'go.*'
+      - '_fixture/**'
+      - '.github/**'
+      - 'codecov.yml'
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        go: [1.24]
+    name: ${{ matrix.os }} @ Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    steps:
+
+      # - name: Set up Go ${{ matrix.go }}
+      #   uses: actions/setup-go@v4
+      #   with:
+      #     go-version: ${{ matrix.go }}
+
+      # - name: Setup Docker
+      #   run: |
+      #     set -x
+      #     mkdir DockerSetup
+      #     cd DockerSetup
+      #     curl -fsSL https://get.docker.com -o install-docker.sh
+      #     sudo sh install-docker.sh
+      #     cd ..
+      #     sudo rm -rf DockerSetup
+
+      # - name: Set up JDK 11
+      #   uses: actions/setup-java@v4
+      #   with:
+      #     java-version: '11'
+      #     distribution: 'zulu'
+      
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Gatling
+        run: |
+          set -x
+          cd benchmark
+          mkdir results
+          sudo sh ./install-gatling
+          sudo mv BenchmarkSimulation.scala ./deps/gatling/user-files/simulations
+          sudo mv ./resources/* ./deps/gatling/user-files/resources/
+          rm -rf resources
+          cd ..
+
+      - name: Docker Compose Up - Echo + Mongo
+        run: |
+          set -x
+          sudo docker compose -f docker-compose-echo-mongo.yml up --remove-orphans -d
+
+      - name: Run Gatling Tests - Echo + Mongo
+        run: |
+          set -x
+          sudo sh ./benchmark/deps/gatling/bin/gatling.sh -rm local -s BenchmarkSimulation -rd "DESCRIPTION"
+          sudo mv ./benchmark/deps/gatling/results/benchmark* ./benchmark/results/Echo-Mongo-Benchmark
+          sudo docker compose -f docker-compose-echo-mongo.yml down --remove-orphans
+      
+      - name: Docker Compose Up - Echo + Postgres
+        run: |
+          set -x
+          sudo docker compose -f docker-compose-echo-postgres.yml up --remove-orphans -d
+
+      - name: Run Gatling Tests - Echo + Postgres
+        run: |
+          set -x
+          sudo sh ./benchmark/deps/gatling/bin/gatling.sh -rm local -s BenchmarkSimulation -rd "DESCRIPTION"
+          sudo mv ./benchmark/deps/gatling/results/benchmark* ./benchmark/results/Echo-Postgres-Benchmark
+          sudo docker compose -f docker-compose-echo-postgres.yml down --remove-orphans
+
+      - name: Docker Compose Up - Gin + Mongo
+        run: |
+          set -x
+          sudo docker compose -f docker-compose-gin-mongo.yml up --remove-orphans -d
+
+      - name: Run Gatling Tests - Gin + Mongo
+        run: |
+          set -x
+          sudo sh ./benchmark/deps/gatling/bin/gatling.sh -rm local -s BenchmarkSimulation -rd "DESCRIPTION"
+          sudo mv ./benchmark/deps/gatling/results/benchmark* ./benchmark/results/Gin-Mongo-Benchmark
+          sudo docker compose -f docker-compose-gin-mongo.yml down --remove-orphans
+
+      - name: Docker Compose Up - Gin + Postgres
+        run: |
+          set -x
+          sudo docker compose -f docker-compose-gin-postgres.yml up --remove-orphans -d
+
+      - name: Run Gatling Tests - Gin + Postgres
+        run: |
+          set -x
+          sudo sh ./benchmark/deps/gatling/bin/gatling.sh -rm local -s BenchmarkSimulation -rd "DESCRIPTION"
+          sudo mv ./benchmark/deps/gatling/results/benchmark* ./benchmark/results/Gin-Postgres-Benchmark
+          sudo docker compose -f docker-compose-gin-postgres.yml down --remove-orphans
+
+      - name: Docker Compose Up - Fiber + Mongo
+        run: |
+          set -x
+          sudo docker compose -f docker-compose-fiber-mongo.yml up --remove-orphans -d
+
+      - name: Run Gatling Tests - Fiber + Mongo
+        run: |
+          set -x
+          sudo sh ./benchmark/deps/gatling/bin/gatling.sh -rm local -s BenchmarkSimulation -rd "DESCRIPTION"
+          sudo mv ./benchmark/deps/gatling/results/benchmark* ./benchmark/results/Fiber-Mongo-Benchmark
+          sudo docker compose -f docker-compose-fiber-mongo.yml down --remove-orphans
+
+      - name: Docker Compose Up - Fiber + Postgres
+        run: |
+          set -x
+          sudo docker compose -f docker-compose-fiber-postgres.yml up --remove-orphans -d
+
+      - name: Run Gatling Tests - Fiber + Postgres
+        run: |
+          set -x
+          sudo sh ./benchmark/deps/gatling/bin/gatling.sh -rm local -s BenchmarkSimulation -rd "DESCRIPTION"
+          sudo mv ./benchmark/deps/gatling/results/benchmark* ./benchmark/results/Fiber-Postgres-Benchmark
+          sudo docker compose -f docker-compose-fiber-postgres.yml down --remove-orphans
+
+      - name: Set current date and time as github output
+        run: echo "DateTime=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_OUTPUT
+        id: set_date_time
+      
+      - name: Upload zip file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Benchmark-Results-${{ steps.set_date_time.outputs.DateTime }}
+          path: ${{ github.workspace }}/benchmark/results
+          compression-level: 9 # maximum compression
+
+      # - name: Create release
+      #   uses: actions/create-release@v1
+      #   with:
+      #     release_name: 'My Release'
+      #     release_body: 'This is my release'
+      #     draft: false
+      #     prerelease: false
+
+      # - name: Upload zip file to release
+      #   uses: actions/upload-release-asset@v1
+      #   with:
+      #     upload_url: ${{ steps.create-release.outputs.upload_url }}
+      #     asset_path: output.zip
+      #     asset_name: output.zip
+      #     asset_content_type: application/zip
